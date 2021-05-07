@@ -158,7 +158,7 @@ void settingClock(){
 
 ISR(TIMER1_COMPA_vect){
 	SEC += 1;
-	if (SEC >= 10)
+	if (SEC >= 60)
 	{
 		SEC = 0;
 		MIN += 1;
