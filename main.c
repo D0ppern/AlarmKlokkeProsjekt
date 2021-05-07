@@ -3,7 +3,7 @@
  *
  * Created: 23.04.2021 00:08:06
  * Author : jojoh
- */ 
+ */
 
 #include <avr/io.h>
 #include <avr/interrupt.h>
@@ -16,10 +16,10 @@
 #include <stdio.h>
 
 
-//Setter knappene på PD4-6 til a, b og c
-#define a 4   //OK knapp
-#define b 5   //Øker antall
-#define c 6   //Minker antall
+//Setter knappene på pinnene PD2, PD4 og PB4 til a, b og c
+#define a 2   //OK knapp   Her står det PIND2
+#define b PINB4   //Øker antall
+#define c 4   //Minker antall	Her står det PIND4
 
 
 static volatile int SEC = 0;//allocating integer memory for storing seconds
@@ -33,37 +33,38 @@ int ALACTIVATE = 0;
 int matte = 0;
 
 //Deklarerer funksjoner
-ISR(TIMER1_COMPA_vect);	
+ISR(TIMER1_COMPA_vect);
 void settingClock();
 int settingAlarm();
 int Numba();
 void fsr();
+void buzzerLyd();
 
 int main(void)
-{	
+{
 	UBRR0 = BAUD_PRESCALE; // Set UBBR according to system clock and desired baud rate
 	UCSR0B |= (1 << RXEN0) | (1 << TXEN0); // Turn on the transmission and reception circuit
-	
-	PORTD |= (1<<PD3) | (1<<PD4) | (1<<PD5) | (1<<PD6);  //Setter intern pull-up 
-	DDRB |= (1<<PB4);	//OUTPUT buzzer
-	
+
+	PORTD |= (1<<PD3) | (1<<PD2) | (1<<PD4);  //Setter intern pull-up
+	PORTB |= (1<<PB4);
+
 	settingClock();	//Kaller funksjon som stiller inn tiden
-	
+
 	TCCR1B |=(1<<CS12)|(1<<CS10)|(1<<WGM12);	// setting prescale 1024 and CTC mode
 	OCR1A = 15625;	//setting compare value equal to counter clock frequency to get an interrupt every second
-	  	
+
 	EIMSK |= (1<<INT1); // Enable INT1
 	EICRA |= (1<<ISC01);	// EICRA sense control, negative flank
-	
-	
+
+
 	PCICR |= (1<<PCIE0);
 	PCMSK0 |= (1<<PCINT0);
-	
+
 	sei();	//enabling global interrupts
 
 	TIMSK1 |=(1<<OCIE1A);	//compare match interrupt enable
-	
-    while (1) 
+
+    while (1)
     {
     }
 }
@@ -74,12 +75,12 @@ ISR(INT1_vect){
 }
 
 ISR(PCINT0_vect){
-	if ((ALHOU == HOU) & (ALMIN == MIN) & (ALACTIVATE == 1))
+	if ((ALHOU == HOU) && (ALMIN == MIN) && (ALACTIVATE == 1))
 	{
-		/*cli();*/
 		printString("Pinnen");		//Programmet går inn her, men må undersøke hvordan piezo lage lyd.
-		PORTB |= (1<<PORTB4);	//Buzzer skrur seg på her
-		fsr();	
+		int buzzer = 1;
+		buzzerLyd(buzzer);
+		fsr();
 		ALACTIVATE = 0;
 
 	}
@@ -90,12 +91,12 @@ void settingClock(){
 	printString("Still inn time:\r");	// \r for ny linje!!!
 	printByte(HOU);
 	printString("\r");
-	
+
 	while (bit_is_set(PIND,a))
-	{	
-		if(bit_is_clear(PIND,b)){	//Øker time antallet med 1
+	{
+		if(bit_is_clear(PINB,b)){	//Øker time antallet med 1
 			HOU += 1;
-			
+
 			if (HOU >= 24)
 			{
 				HOU = 0;
@@ -104,10 +105,10 @@ void settingClock(){
 			printString("\r");
 			_delay_ms(500);
 		}
-		
+
 		if(bit_is_clear(PIND,c)){	//Minker time antallet med 1
 			HOU -= 1;
-			
+
 			if (HOU < 0)
 			{
 				HOU = 23;
@@ -117,17 +118,17 @@ void settingClock(){
 			_delay_ms(500);
 		}
 	}
-	
-	_delay_ms(1000);
+
+	_delay_ms(500);
 	printString("Still inn minutt:\r");
 	printByte(MIN);
 	printString("\r");
-	
+
 	while (bit_is_set(PIND,a))
-	{	
-		if(bit_is_clear(PIND,b)){	//Øker minutt antallet med 1
+	{
+		if(bit_is_clear(PINB,b)){	//Øker minutt antallet med 1
 			MIN += 1;
-			
+
 			if (MIN > 59)
 			{
 				MIN = 0;
@@ -136,10 +137,10 @@ void settingClock(){
 			printString("\r");
 			_delay_ms(500);
 		}
-		
+
 		if(bit_is_clear(PIND,c)){	//Minker minutt antallet med 1
 			MIN -= 1;
-			
+
 			if (MIN < 0)
 			{
 				MIN = 59;
@@ -161,23 +162,22 @@ ISR(TIMER1_COMPA_vect){
 	{
 		SEC = 0;
 		MIN += 1;
-		
-		
+
+
 		if (MIN >= 60)
 		{
 			MIN = 0;
 			HOU += 1;
-			
+
 			if (HOU >= 24)
 			{
 				HOU = 0;
 			}
-				
 		}
-		
-		PORTB |= (1<<PORTB0); //Kaller interrupten som sjekker om alarmtid = klokketid	
-		
-		printByte(HOU);     
+
+		PORTB |= (1<<PORTB0); //Kaller interrupten som sjekker om alarmtid = klokketid
+
+		printByte(HOU);
 		printString(":");
 		printByte(MIN);
 		printString("\r");
@@ -188,12 +188,12 @@ int settingAlarm(){
 	printString("Still inn time ALARM:\r");	// \r for ny linje!!!
 	printByte(ALHOU);
 	printString("\r");
-	
+
 	while (bit_is_set(PIND,a))
-	{	
-		if(bit_is_clear(PIND,b)){	//Øker time antallet med 1
+	{
+		if(bit_is_clear(PINB,b)){	//Øker time antallet med 1
 			ALHOU += 1;
-			
+
 			if (ALHOU >= 24)
 			{
 				ALHOU = 0;
@@ -202,10 +202,10 @@ int settingAlarm(){
 			printString("\r");
 			_delay_ms(250);
 		}
-		
+
 		if(bit_is_clear(PIND,c)){	//Minker time antallet med 1
 			ALHOU -= 1;
-			
+
 			if (ALHOU < 0)
 			{
 				ALHOU = 23;
@@ -215,17 +215,17 @@ int settingAlarm(){
 			_delay_ms(250);
 		}
 	}
-	
+
 	_delay_ms(250);
 	printString("Still inn minutt:\r");
 	printByte(ALMIN);
 	printString("\r");
-	
+
 	while (bit_is_set(PIND,a))
 	{
-		if(bit_is_clear(PIND,b)){	//Øker minutt antallet med 1
+		if(bit_is_clear(PINB,b)){	//Øker minutt antallet med 1
 			ALMIN += 1;
-			
+
 			if (ALMIN > 59)
 			{
 				ALMIN = 0;
@@ -234,10 +234,10 @@ int settingAlarm(){
 			printString("\r");
 			_delay_ms(250);
 		}
-		
+
 		if(bit_is_clear(PIND,c)){	//Minker minutt antallet med 1
 			ALMIN -= 1;
-			
+
 			if (ALMIN < 0)
 			{
 				ALMIN = 59;
@@ -257,20 +257,20 @@ int Numba(){
 	int i = 120;
 	int d = 3;
 	srand(SEC);		//Genererer et "random number seed" basert på hva tiden nå er
-	
+
 	int num1 = (rand() % (i - 0 + 1) + 0);		//Prøver å skape tilfeldige tall, to froskjellige måter å gjøre det på. (rand() % (øvregrense - nedregrense + 1) + nedregrense)
 	int num2 = (rand() % (i - 0 + 1) + 0);
 	int correctAns = num1 + num2;
 	int wrongAns1 = (rand() % ((correctAns + 5) - (correctAns - 5) + 1) + (correctAns - 5));
 	int wrongAns2 = (rand() % ((correctAns + 5) - (correctAns - 5) + 1) + (correctAns - 5));
 	int multiplechoice = (rand() % (d - 1 + 1) + 1);
-	
-	printString("What's the sum of these numbers:\r");
+
+	printString("Hva er summen av disse tallene?\r");
 	printByte(num1);
 	printString(" + ");
 	printByte(num2);
 	printString("\r");
-	
+
 	if(wrongAns1 == correctAns)
 	{
 		wrongAns1 += 1;
@@ -279,15 +279,16 @@ int Numba(){
 	{
 		wrongAns2 += 1;
 	}
-	
+
 	if (multiplechoice == 1)
 	{
 		printString("	a: ");
 		printByte(correctAns);
 		printString("	b: ");
 		printByte(wrongAns1);
-		printString("	c: \r");
+		printString("	c: ");
 		printByte(wrongAns2);
+		printString("\r");
 	}
 	if (multiplechoice == 2)
 	{
@@ -295,8 +296,9 @@ int Numba(){
 		printByte(wrongAns1);
 		printString("	b: ");
 		printByte(correctAns);
-		printString("	c: \r");
+		printString("	c: ");
 		printByte(wrongAns2);
+		printString("\r");
 	}
 	if (multiplechoice == 3)
 	{
@@ -304,43 +306,44 @@ int Numba(){
 		printByte(wrongAns2);
 		printString("	b: ");
 		printByte(wrongAns1);
-		printString("	c: \r");
+		printString("	c: ");
 		printByte(correctAns);
+		printString("\r");
 	}
-	
+
 	while (matte == 0)
 	{
-		if ((bit_is_clear(PIND,a)) & (multiplechoice == 1))
+		if ((bit_is_clear(PIND,a)) && (multiplechoice == 1))
 		{
-			printString("Correct!\r");
+			printString("Riktig!\r");
 			matte = 1;
 			return matte;
 		}
-		if (((bit_is_clear(PIND,b)) | (bit_is_clear(PIND,c))) & (multiplechoice == 1))
+		if (((bit_is_clear(PINB,b)) | (bit_is_clear(PIND,c))) && (multiplechoice == 1))
 		{
-			printString("Wrong answer, try again\r");
+			printString("Feil svar, prøv igjen\r");
 		}
-		
-		if ((bit_is_clear(PIND,b)) & (multiplechoice == 2))
+
+		if ((bit_is_clear(PINB,b)) && (multiplechoice == 2))
 		{
-			printString("Correct!\r");
+			printString("Riktig!\r");
 			matte = 1;
 			return matte;
 		}
-		if (((bit_is_clear(PIND,a)) | (bit_is_clear(PIND,c))) & (multiplechoice == 2))
+		if (((bit_is_clear(PIND,a)) | (bit_is_clear(PIND,c))) && (multiplechoice == 2))
 		{
-			printString("Wrong answer, try again\r");
+			printString("Feil svar, prøv igjen\r");
 		}
-		
-		if ((bit_is_clear(PIND,c)) & (multiplechoice == 3))
+
+		if ((bit_is_clear(PIND,c)) && (multiplechoice == 3))
 		{
-			printString("Correct!\r");
+			printString("Riktig!\r");
 			matte = 1;
 			return matte;
 		}
-		if(((bit_is_clear(PIND,b)) | (bit_is_clear(PIND,a))) & (multiplechoice == 3))
+		if(((bit_is_clear(PINB,b)) | (bit_is_clear(PIND,a))) && (multiplechoice == 3))
 		{
-			printString("Wrong answer, try again\r");
+			printString("Feil svar, prøv igjen\r");
 		}
 	}
 }
